@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verification Dashboard</title>
+    <title>EDC Smiles KPI Dashboard</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -38,6 +38,19 @@
             u: 'Missing Tooth Clause',
             v: 'Coordination of Benefits',
             w: 'Benefit Period'
+        };
+
+        const countWorkingDays = (startDate, endDate) => {
+            if (!startDate || !endDate) return 0;
+            let count = 0;
+            let current = new Date(startDate);
+            const end = new Date(endDate);
+            while (current <= end) {
+                const dayOfWeek = current.getDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) count++;
+                current.setDate(current.getDate() + 1);
+            }
+            return count;
         };
 
         const parseDate = (dateStr) => {
@@ -171,36 +184,36 @@
             const [error, setError] = useState('');
             const [showMistakesModal, setShowMistakesModal] = useState(false);
             const [showGoalModal, setShowGoalModal] = useState(false);
-            const [verificationGoal, setVerificationGoal] = useState(100);
+            const [dailyGoal, setDailyGoal] = useState(10);
             const [selectedEmployee, setSelectedEmployee] = useState('');
             const [employees, setEmployees] = useState([]);
 
-            // Load goal from localStorage based on selected employee
+            // Load daily goal from localStorage based on selected employee
             const loadGoalForEmployee = (employeeName) => {
                 const key = employeeName || 'all_employees';
-                const savedGoals = JSON.parse(localStorage.getItem('verificationGoals') || '{}');
-                return savedGoals[key] || 100;
+                const savedGoals = JSON.parse(localStorage.getItem('dailyVerificationGoals') || '{}');
+                return savedGoals[key] || 10;
             };
 
-            // Save goal to localStorage for specific employee
+            // Save daily goal to localStorage for specific employee
             const saveGoalForEmployee = (employeeName, goal) => {
                 const key = employeeName || 'all_employees';
-                const savedGoals = JSON.parse(localStorage.getItem('verificationGoals') || '{}');
+                const savedGoals = JSON.parse(localStorage.getItem('dailyVerificationGoals') || '{}');
                 savedGoals[key] = goal;
-                localStorage.setItem('verificationGoals', JSON.stringify(savedGoals));
+                localStorage.setItem('dailyVerificationGoals', JSON.stringify(savedGoals));
             };
 
-            // Update goal and save it
-            const updateVerificationGoal = (newGoal) => {
+            // Update daily goal and save it
+            const updateDailyGoal = (newGoal) => {
                 const goal = Math.max(0, parseInt(newGoal) || 0);
-                setVerificationGoal(goal);
+                setDailyGoal(goal);
                 saveGoalForEmployee(selectedEmployee, goal);
             };
 
             // Load goal when employee changes
             useEffect(() => {
                 const goal = loadGoalForEmployee(selectedEmployee);
-                setVerificationGoal(goal);
+                setDailyGoal(goal);
             }, [selectedEmployee]);
 
             const fetchDataFromSheet = async () => {
@@ -436,8 +449,16 @@
 
             const metrics = calculateMetrics();
             const perfColor = getPerformanceColor(metrics.accuracy);
-            const goalPercentage = verificationGoal > 0 ? Math.min(100, (metrics.totalVerifications / verificationGoal) * 100) : 0;
-            const remainingVerifications = Math.max(0, verificationGoal - metrics.totalVerifications);
+            
+            // Calculate working days in the selected date range
+            const workingDays = (startDate && endDate) 
+                ? countWorkingDays(new Date(startDate), new Date(endDate))
+                : 0;
+            
+            // Calculate total goal based on daily goal and working days
+            const totalGoal = workingDays * dailyGoal;
+            const goalPercentage = totalGoal > 0 ? Math.min(100, (metrics.totalVerifications / totalGoal) * 100) : 0;
+            const remainingVerifications = Math.max(0, totalGoal - metrics.totalVerifications);
 
             return (
                 <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8">
@@ -551,9 +572,14 @@
                                                         <path d="M2 12l10 5 10-5"/>
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-indigo-200 text-sm font-semibold">Verification Goal</h3>
+                                                <h3 className="text-indigo-200 text-sm font-semibold">Daily Goal</h3>
                                             </div>
-                                            <p className="text-white text-3xl font-bold mb-2">{verificationGoal}</p>
+                                            <p className="text-white text-3xl font-bold mb-2">{dailyGoal}/day</p>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-indigo-300 text-xs">{workingDays} working days</span>
+                                                <span className="text-indigo-400 text-xs">•</span>
+                                                <span className="text-indigo-300 text-xs">{totalGoal} total goal</span>
+                                            </div>
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-1 bg-slate-700 rounded-full h-2">
                                                     <div 
@@ -689,64 +715,106 @@
                         </Modal>
 
                         {/* Verification Goal Modal */}
-                        <Modal isOpen={showGoalModal} onClose={() => setShowGoalModal(false)} title="Verification Goal Progress">
+                        <Modal isOpen={showGoalModal} onClose={() => setShowGoalModal(false)} title="Daily Verification Goal">
                             <div className="space-y-6">
                                 <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                                    <label className="text-slate-300 text-sm font-semibold mb-3 block">Set Goal</label>
+                                    <label className="text-slate-300 text-sm font-semibold mb-3 block">Set Daily Goal</label>
                                     <div className="flex items-center gap-3">
                                         <input 
                                             type="number" 
-                                            value={verificationGoal}
-                                            onChange={(e) => updateVerificationGoal(e.target.value)}
+                                            value={dailyGoal}
+                                            onChange={(e) => updateDailyGoal(e.target.value)}
                                             className="flex-1 bg-slate-800 text-white px-4 py-3 rounded-lg border border-slate-600 focus:border-indigo-500 focus:outline-none text-lg font-semibold"
                                             min="0"
                                         />
-                                        <div className="text-slate-400 text-sm">verifications</div>
+                                        <div className="text-slate-400 text-sm">per day</div>
                                     </div>
-                                    <p className="text-slate-400 text-xs mt-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline mr-1">
-                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                    <p className="text-slate-400 text-xs mt-2 flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <line x1="12" y1="16" x2="12" y2="12"/>
+                                            <line x1="12" y1="8" x2="12.01" y2="8"/>
                                         </svg>
                                         Goal saved for: {selectedEmployee || 'All Employees'}
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 rounded-xl p-5 border border-indigo-500/30">
-                                        <div className="text-indigo-300 text-sm font-semibold mb-2">Current Progress</div>
-                                        <div className="text-white text-3xl font-bold">{metrics.totalVerifications}</div>
-                                        <div className="text-indigo-400 text-xs mt-1">verifications completed</div>
-                                    </div>
-
-                                    <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-xl p-5 border border-purple-500/30">
-                                        <div className="text-purple-300 text-sm font-semibold mb-2">Remaining</div>
-                                        <div className="text-white text-3xl font-bold">{remainingVerifications}</div>
-                                        <div className="text-purple-400 text-xs mt-1">more to reach goal</div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <span className="text-slate-300 font-semibold">Completion Rate</span>
-                                        <span className="text-white text-2xl font-bold">{goalPercentage.toFixed(1)}%</span>
-                                    </div>
-                                    <div className="bg-slate-800 rounded-full h-4 overflow-hidden">
-                                        <div 
-                                            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                                            style={{ width: `${goalPercentage}%` }}
-                                        >
-                                            {goalPercentage > 10 && (
-                                                <span className="text-white text-xs font-bold drop-shadow">{goalPercentage.toFixed(0)}%</span>
-                                            )}
+                                {startDate && endDate ? (
+                                    <>
+                                        <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 rounded-xl p-5 border border-indigo-500/20">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-300">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                                                    <line x1="16" y1="2" x2="16" y2="6"/>
+                                                    <line x1="8" y1="2" x2="8" y2="6"/>
+                                                </svg>
+                                                <span className="text-indigo-200 font-semibold text-sm">Date Range Analysis</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-slate-800/50 rounded-lg p-3">
+                                                    <div className="text-slate-400 text-xs mb-1">Working Days</div>
+                                                    <div className="text-white text-2xl font-bold">{workingDays}</div>
+                                                    <div className="text-indigo-300 text-xs mt-1">Mon-Fri only</div>
+                                                </div>
+                                                <div className="bg-slate-800/50 rounded-lg p-3">
+                                                    <div className="text-slate-400 text-xs mb-1">Total Goal</div>
+                                                    <div className="text-white text-2xl font-bold">{totalGoal}</div>
+                                                    <div className="text-indigo-300 text-xs mt-1">{dailyGoal} × {workingDays} days</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
 
-                                {remainingVerifications === 0 && metrics.totalVerifications > 0 && (
-                                    <div className="bg-gradient-to-r from-green-900/50 to-emerald-900/50 rounded-xl p-6 border border-green-500/30 text-center">
-                                        <div className="text-green-400 text-5xl mb-3">🎉</div>
-                                        <p className="text-white text-xl font-bold mb-1">Goal Achieved!</p>
-                                        <p className="text-green-300 text-sm">You've reached your verification goal</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 rounded-xl p-5 border border-indigo-500/30">
+                                                <div className="text-indigo-300 text-sm font-semibold mb-2">Current Progress</div>
+                                                <div className="text-white text-3xl font-bold">{metrics.totalVerifications}</div>
+                                                <div className="text-indigo-400 text-xs mt-1">verifications completed</div>
+                                            </div>
+
+                                            <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-xl p-5 border border-purple-500/30">
+                                                <div className="text-purple-300 text-sm font-semibold mb-2">Remaining</div>
+                                                <div className="text-white text-3xl font-bold">{remainingVerifications}</div>
+                                                <div className="text-purple-400 text-xs mt-1">more to reach goal</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-700/40 rounded-xl p-6 border border-slate-600/50">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="text-slate-300 font-semibold">Completion Rate</span>
+                                                <span className="text-white text-2xl font-bold">{goalPercentage.toFixed(1)}%</span>
+                                            </div>
+                                            <div className="bg-slate-800 rounded-full h-4 overflow-hidden">
+                                                <div 
+                                                    className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                                                    style={{ width: `${goalPercentage}%` }}
+                                                >
+                                                    {goalPercentage > 10 && (
+                                                        <span className="text-white text-xs font-bold drop-shadow">{goalPercentage.toFixed(0)}%</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 text-slate-400 text-xs text-center">
+                                                Average: {workingDays > 0 ? (metrics.totalVerifications / workingDays).toFixed(1) : 0} verifications per day
+                                            </div>
+                                        </div>
+
+                                        {remainingVerifications === 0 && metrics.totalVerifications > 0 && (
+                                            <div className="bg-gradient-to-r from-green-900/50 to-emerald-900/50 rounded-xl p-6 border border-green-500/30 text-center">
+                                                <div className="text-green-400 text-5xl mb-3">🎉</div>
+                                                <p className="text-white text-xl font-bold mb-1">Goal Achieved!</p>
+                                                <p className="text-green-300 text-sm">You've reached your verification goal for this period</p>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="bg-yellow-900/30 rounded-xl p-6 border border-yellow-500/30 text-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3 text-yellow-400">
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                        </svg>
+                                        <p className="text-yellow-200 font-semibold mb-2">Select a Date Range</p>
+                                        <p className="text-yellow-300 text-sm">Choose start and end dates to see your goal progress and working days calculation</p>
                                     </div>
                                 )}
                             </div>
