@@ -1,514 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verification Dashboard</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgb(51, 65, 85); border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgb(100, 116, 139); border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgb(148, 163, 184); }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Verification Dashboard</title>
+
+  <!-- React -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
 
-        const SHEET_ID = '1bwbHVmOhorOGxLu_xAuOoiEksaSEn3d4trZB1x7NKXc';
-        const API_KEY = 'AIzaSyAeiFMlkhhDjEahdKksbS6HomSCbO9iQ50';
+<body class="bg-slate-950">
+<div id="root"></div>
 
-        const parseDate = (dateStr) => {
-            if (!dateStr) return null;
-            let dateOnly = dateStr.toString().trim();
-            if (dateOnly.includes(' ')) {
-                dateOnly = dateOnly.split(' ')[0];
-            }
-            if (dateOnly.includes('-')) {
-                const parts = dateOnly.split('-');
-                if (parts.length === 3) {
-                    const year = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const day = parseInt(parts[2], 10);
-                    return new Date(year, month, day, 12, 0, 0, 0);
-                }
-            }
-            if (dateOnly.includes('/')) {
-                const parts = dateOnly.split('/');
-                if (parts.length === 3) {
-                    const month = parseInt(parts[0], 10) - 1;
-                    const day = parseInt(parts[1], 10);
-                    const year = parseInt(parts[2], 10);
-                    return new Date(year, month, day, 12, 0, 0, 0);
-                }
-            }
-            return null;
-        };
+<script type="text/babel">
+const { useEffect, useState, useRef } = React;
 
-        const countWorkingDays = (startDate, endDate) => {
-            if (!startDate || !endDate) return 0;
-            let count = 0;
-            let current = new Date(startDate);
-            while (current <= endDate) {
-                const dayOfWeek = current.getDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5) count++;
-                current.setDate(current.getDate() + 1);
-            }
-            return count;
-        };
+const SHEET_ID = '1bwbHVmOhorOGxLu_xAuOoiEksaSEn3d4trZB1x7NKXc';
+const API_KEY  = 'AIzaSyAeiFMlkhhDjEahdKksbS6HomSCbO9iQ50';
+const RANGE    = 'Data!A:W';
 
-        const getPerformanceColor = (percentage) => {
-            if (percentage >= 90) return { bg: 'from-emerald-500 to-green-400', text: 'text-emerald-300', icon: 'bg-emerald-600/20', border: 'border-emerald-400' };
-            if (percentage >= 75) return { bg: 'from-lime-500 to-green-400', text: 'text-lime-300', icon: 'bg-lime-600/20', border: 'border-lime-400' };
-            if (percentage >= 60) return { bg: 'from-yellow-500 to-amber-400', text: 'text-yellow-300', icon: 'bg-yellow-600/20', border: 'border-yellow-400' };
-            if (percentage >= 40) return { bg: 'from-orange-500 to-yellow-400', text: 'text-orange-300', icon: 'bg-orange-600/20', border: 'border-orange-400' };
-            return { bg: 'from-red-500 to-orange-400', text: 'text-red-300', icon: 'bg-red-600/20', border: 'border-red-400' };
-        };
+/* ---------------- Utils ---------------- */
 
-        const PerformanceChart = ({ performanceData }) => {
-            const chartRef = useRef(null);
-            const chartInstance = useRef(null);
+const parseDate = (val) => {
+  if (!val) return null;
+  if (val.includes('/')) {
+    const [m, d, y] = val.split('/');
+    return new Date(y, m - 1, d);
+  }
+  if (val.includes('-')) {
+    const [y, m, d] = val.split('-');
+    return new Date(y, m - 1, d);
+  }
+  return null;
+};
 
-            useEffect(() => {
-                if (!chartRef.current || !performanceData || performanceData.length === 0) return;
-                if (chartInstance.current) chartInstance.current.destroy();
+/* ---------------- Chart ---------------- */
 
-                const ctx = chartRef.current.getContext('2d');
-                chartInstance.current = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: performanceData.map(d => d.label),
-                        datasets: [{
-                            label: 'Accuracy %',
-                            data: performanceData.map(d => d.value),
-                            borderColor: 'rgb(34, 211, 238)',
-                            backgroundColor: 'rgba(34, 211, 238, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointBackgroundColor: 'rgb(34, 211, 238)',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            pointRadius: 5,
-                            pointHoverRadius: 7
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                                titleColor: '#fff',
-                                bodyColor: '#cbd5e1',
-                                borderColor: '#475569',
-                                borderWidth: 1,
-                                padding: 12,
-                                displayColors: false,
-                                callbacks: { label: (context) => `Accuracy: ${context.parsed.y.toFixed(1)}%` }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                max: 100,
-                                ticks: { color: '#94a3b8', callback: (value) => value + '%' },
-                                grid: { color: 'rgba(148, 163, 184, 0.1)' }
-                            },
-                            x: {
-                                ticks: { color: '#94a3b8' },
-                                grid: { color: 'rgba(148, 163, 184, 0.1)' }
-                            }
-                        }
-                    }
-                });
+const AccuracyChart = ({ data }) => {
+  const ref = useRef(null);
+  const chart = useRef(null);
 
-                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-            }, [performanceData]);
+  useEffect(() => {
+    if (!ref.current || !data.length) return;
+    if (chart.current) chart.current.destroy();
 
-            return <div className="h-80"><canvas ref={chartRef}></canvas></div>;
-        };
+    chart.current = new Chart(ref.current, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.label),
+        datasets: [{
+          data: data.map(d => d.value),
+          borderColor: '#22d3ee',
+          backgroundColor: 'rgba(34,211,238,0.15)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+        }
+      }
+    });
 
-        const VerificationDashboard = () => {
-            const [data, setData] = useState([]);
-            const [startDate, setStartDate] = useState('');
-            const [endDate, setEndDate] = useState('');
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
+    return () => chart.current && chart.current.destroy();
+  }, [data]);
 
-            const fetchDataFromSheet = async () => {
-                setLoading(true);
-                setError('');
-                try {
-                    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:W?key=${API_KEY}`;
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Failed to fetch data: ${response.statusText}`);
-                    const result = await response.json();
-                    const rows = result.values || [];
-                    
-                    // Skip header row
-                    const parsedData = rows.slice(1).map(row => ({
-                        date: row[0] || '',
-                        status: row[9] || '', // Column J (index 9)
-                        mistakes: {
-                            k: row[10] || '',
-                            l: row[11] || '',
-                            m: row[12] || '',
-                            n: row[13] || '',
-                            o: row[14] || '',
-                            p: row[15] || '',
-                            q: row[16] || '',
-                            r: row[17] || '',
-                            s: row[18] || '',
-                            t: row[19] || '',
-                            u: row[20] || '',
-                            v: row[21] || '',
-                            w: row[22] || ''
-                        }
-                    }));
+  return <canvas ref={ref} className="h-72"></canvas>;
+};
 
-                    setData(parsedData);
-                } catch (err) {
-                    console.error('Error fetching data:', err);
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
+/* ---------------- App ---------------- */
 
-            useEffect(() => { fetchDataFromSheet(); }, []);
+const App = () => {
+  const [rows, setRows] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [error, setError] = useState('');
 
-            const calculateMetrics = () => {
-                let filtered = data;
+  /* Fetch data */
+  useEffect(() => {
+    fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`)
+      .then(res => res.json())
+      .then(json => {
+        const data = json.values.slice(1).map(r => ({
+          date: r[0],
+          status: r[9],
+          mistakes: [r[16], r[17], r[18], r[19], r[20], r[21], r[22]]
+        }));
+        setRows(data);
 
-                // Apply date filters
-                if (startDate) {
-                    const parts = startDate.split('-');
-                    const startDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0, 0);
-                    filtered = filtered.filter(row => {
-                        const rowDate = parseDate(row.date);
-                        if (!rowDate) return false;
-                        const rowDateOnly = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate(), 12, 0, 0, 0);
-                        return rowDateOnly >= startDateObj;
-                    });
-                }
+        const dates = data.map(d => parseDate(d.date)).filter(Boolean);
+        if (dates.length) {
+          setStartDate(dates[0].toISOString().slice(0,10));
+          setEndDate(dates[dates.length - 1].toISOString().slice(0,10));
+        }
+      })
+      .catch(() => setError('Failed to fetch data'));
+  }, []);
 
-                if (endDate) {
-                    const parts = endDate.split('-');
-                    const endDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0, 0);
-                    filtered = filtered.filter(row => {
-                        const rowDate = parseDate(row.date);
-                        if (!rowDate) return false;
-                        const rowDateOnly = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate(), 12, 0, 0, 0);
-                        return rowDateOnly <= endDateObj;
-                    });
-                }
+  /* Filter */
+  const filtered = rows.filter(r => {
+    const d = parseDate(r.date);
+    if (!d) return false;
+    if (startDate && d < new Date(startDate)) return false;
+    if (endDate && d > new Date(endDate)) return false;
+    return r.status && r.status.toLowerCase() !== 'verifying';
+  });
 
-                // Count total verifications (exclude no status and "verifying" status)
-                const totalVerifications = filtered.filter(row => {
-                    const status = row.status.toLowerCase().trim();
-                    return status !== '' && status !== 'verifying';
-                }).length;
+  /* Metrics */
+  const totalVerifications = filtered.length;
 
-                // Count mistakes (columns K-W)
-                let totalMistakes = 0;
-                filtered.forEach(row => {
-                    const status = row.status.toLowerCase().trim();
-                    if (status !== '' && status !== 'verifying') {
-                        Object.values(row.mistakes).forEach(mistake => {
-                            if (mistake && mistake.toString().trim() !== '') {
-                                totalMistakes++;
-                            }
-                        });
-                    }
-                });
+  const totalMistakes = filtered.reduce((sum, r) => {
+    return sum + r.mistakes.filter(m => m && m.trim()).length;
+  }, 0);
 
-                // Calculate accuracy: 100% - (2% per mistake)
-                const accuracy = Math.max(0, 100 - (totalMistakes * 2));
+  const accuracy = Math.max(0, 100 - totalMistakes * 2);
 
-                // Status breakdown
-                const statusBreakdown = {};
-                filtered.forEach(row => {
-                    const status = row.status.trim();
-                    if (status !== '' && status.toLowerCase() !== 'verifying') {
-                        statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
-                    }
-                });
+  /* Chart data (daily) */
+  const chartData = {};
+  filtered.forEach(r => {
+    const d = parseDate(r.date);
+    const key = `${d.getMonth()+1}/${d.getDate()}`;
+    chartData[key] ??= { v: 0, m: 0 };
+    chartData[key].v++;
+    chartData[key].m += r.mistakes.filter(m => m && m.trim()).length;
+  });
 
-                // Performance chart data
-                let performanceChartData = [];
-                let dateRangeType = 'daily';
+  const performance = Object.entries(chartData).map(([k,v]) => ({
+    label: k,
+    value: Math.max(0, 100 - v.m * 2)
+  }));
 
-                if (startDate && endDate) {
-                    const start = new Date(startDate);
-                    const end = new Date(endDate);
-                    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  /* Status breakdown */
+  const statusBreakdown = {};
+  filtered.forEach(r => {
+    statusBreakdown[r.status] = (statusBreakdown[r.status] || 0) + 1;
+  });
 
-                    if (daysDiff <= 7) {
-                        dateRangeType = 'daily';
-                        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                            const dayData = filtered.filter(row => {
-                                const rowDate = parseDate(row.date);
-                                return rowDate && rowDate.toDateString() === d.toDateString();
-                            });
+  return (
+    <div className="p-8 max-w-6xl mx-auto text-white">
+      <h1 className="text-3xl font-bold mb-6">Verification Dashboard</h1>
 
-                            const dayVerifications = dayData.filter(row => {
-                                const status = row.status.toLowerCase().trim();
-                                return status !== '' && status !== 'verifying';
-                            });
+      {error && <div className="bg-red-800 p-3 rounded mb-4">{error}</div>}
 
-                            let dayMistakes = 0;
-                            dayVerifications.forEach(row => {
-                                Object.values(row.mistakes).forEach(mistake => {
-                                    if (mistake && mistake.toString().trim() !== '') {
-                                        dayMistakes++;
-                                    }
-                                });
-                            });
+      <div className="flex gap-4 mb-6">
+        <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="bg-slate-800 p-2 rounded"/>
+        <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="bg-slate-800 p-2 rounded"/>
+      </div>
 
-                            const dayAccuracy = dayVerifications.length > 0 ? Math.max(0, 100 - (dayMistakes * 2)) : 0;
-                            performanceChartData.push({ label: `${d.getMonth() + 1}/${d.getDate()}`, value: dayAccuracy });
-                        }
-                    } else if (daysDiff <= 30) {
-                        dateRangeType = 'weekly';
-                        const weeks = [];
-                        let weekStart = new Date(start);
-                        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-                        while (weekStart <= end) {
-                            const weekEnd = new Date(weekStart);
-                            weekEnd.setDate(weekEnd.getDate() + 6);
-                            weeks.push({ start: new Date(weekStart), end: new Date(Math.min(weekEnd, end)) });
-                            weekStart.setDate(weekStart.getDate() + 7);
-                        }
-                        weeks.forEach((week, index) => {
-                            const weekData = filtered.filter(row => {
-                                const rowDate = parseDate(row.date);
-                                return rowDate && rowDate >= week.start && rowDate <= week.end;
-                            });
+      <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="bg-slate-800 p-6 rounded">
+          <p className="text-sm text-slate-400">Total Verifications</p>
+          <p className="text-4xl font-bold">{totalVerifications}</p>
+          <p className="text-sm text-slate-400">{totalMistakes} mistakes</p>
+        </div>
 
-                            const weekVerifications = weekData.filter(row => {
-                                const status = row.status.toLowerCase().trim();
-                                return status !== '' && status !== 'verifying';
-                            });
+        <div className="bg-emerald-600 p-6 rounded">
+          <p className="text-sm">Accuracy</p>
+          <p className="text-5xl font-black">{accuracy}%</p>
+          <p className="text-sm">-2% per mistake</p>
+        </div>
+      </div>
 
-                            let weekMistakes = 0;
-                            weekVerifications.forEach(row => {
-                                Object.values(row.mistakes).forEach(mistake => {
-                                    if (mistake && mistake.toString().trim() !== '') {
-                                        weekMistakes++;
-                                    }
-                                });
-                            });
+      <div className="bg-slate-800 p-6 rounded mb-8">
+        <h2 className="font-bold mb-4">Accuracy Trend</h2>
+        <AccuracyChart data={performance} />
+      </div>
 
-                            const weekAccuracy = weekVerifications.length > 0 ? Math.max(0, 100 - (weekMistakes * 2)) : 0;
-                            performanceChartData.push({ label: `Week ${index + 1}`, value: weekAccuracy });
-                        });
-                    } else {
-                        dateRangeType = 'monthly';
-                        const months = [];
-                        let monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-                        while (monthStart <= end) {
-                            const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
-                            months.push({
-                                start: new Date(Math.max(monthStart, start)),
-                                end: new Date(Math.min(monthEnd, end)),
-                                label: monthStart.toLocaleString('default', { month: 'short', year: 'numeric' })
-                            });
-                            monthStart.setMonth(monthStart.getMonth() + 1);
-                        }
-                        months.forEach((month) => {
-                            const monthData = filtered.filter(row => {
-                                const rowDate = parseDate(row.date);
-                                return rowDate && rowDate >= month.start && rowDate <= month.end;
-                            });
+      <div className="bg-slate-800 p-6 rounded">
+        <h2 className="font-bold mb-4">Verification Breakdown</h2>
+        {Object.entries(statusBreakdown).map(([s,c]) => (
+          <div key={s} className="flex justify-between border-b border-slate-700 py-2">
+            <span>{s}</span>
+            <span>{c}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-                            const monthVerifications = monthData.filter(row => {
-                                const status = row.status.toLowerCase().trim();
-                                return status !== '' && status !== 'verifying';
-                            });
-
-                            let monthMistakes = 0;
-                            monthVerifications.forEach(row => {
-                                Object.values(row.mistakes).forEach(mistake => {
-                                    if (mistake && mistake.toString().trim() !== '') {
-                                        monthMistakes++;
-                                    }
-                                });
-                            });
-
-                            const monthAccuracy = monthVerifications.length > 0 ? Math.max(0, 100 - (monthMistakes * 2)) : 0;
-                            performanceChartData.push({ label: month.label, value: monthAccuracy });
-                        });
-                    }
-                }
-
-                return {
-                    totalVerifications,
-                    accuracy,
-                    totalMistakes,
-                    statusBreakdown: Object.entries(statusBreakdown).sort((a, b) => b[1] - a[1]),
-                    performanceChartData,
-                    dateRangeType
-                };
-            };
-
-            const metrics = calculateMetrics();
-            const perfColor = getPerformanceColor(metrics.accuracy);
-
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-3 rounded-xl shadow-lg shadow-cyan-500/50">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                        <rect x="4" y="2" width="16" height="20" rx="2"/>
-                                        <line x1="8" y1="6" x2="16" y2="6"/>
-                                    </svg>
-                                </div>
-                                <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Verification Dashboard</h1>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur px-4 py-3 rounded-xl border border-slate-600 shadow-lg">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <rect x="3" y="4" width="18" height="18" rx="2"/>
-                                        <line x1="16" y1="2" x2="16" y2="6"/>
-                                        <line x1="8" y1="2" x2="8" y2="6"/>
-                                    </svg>
-                                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-white text-sm focus:outline-none" />
-                                    <span className="text-slate-400 font-bold">-</span>
-                                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-white text-sm focus:outline-none" />
-                                </div>
-
-                                <button onClick={fetchDataFromSheet} disabled={loading} className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-xl transition-all shadow-lg shadow-cyan-500/30 font-semibold">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                                    </svg>
-                                    {loading ? 'Refreshing...' : 'Refresh'}
-                                </button>
-                            </div>
-                        </div>
-
-                        {error && <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-200 text-sm shadow-lg">{error}</div>}
-
-                        {loading && (
-                            <div className="text-center py-20">
-                                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-12 border border-slate-600 inline-block shadow-2xl">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
-                                    <p className="text-slate-300 text-lg">Loading data...</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {!loading && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-gradient-to-br from-slate-800 via-slate-800 to-cyan-900/20 rounded-2xl p-6 border border-cyan-500/30 hover:border-cyan-400 hover:shadow-2xl hover:shadow-cyan-500/20 transition-all relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-500"></div>
-                                        <div className="relative z-10">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-2.5 rounded-lg shadow-lg shadow-cyan-500/50">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                                                        <polyline points="22 4 12 14.01 9 11.01"/>
-                                                    </svg>
-                                                </div>
-                                                <h3 className="text-cyan-200 text-sm font-semibold">Total Verifications</h3>
-                                            </div>
-                                            <p className="text-white text-3xl font-bold mb-2">{metrics.totalVerifications}</p>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-cyan-300 text-sm font-medium">{metrics.totalMistakes} mistakes found</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {perfColor && (
-                                        <div className={`bg-gradient-to-br ${perfColor.bg} rounded-2xl p-6 border-2 ${perfColor.border} hover:shadow-2xl transition-all relative overflow-hidden group shadow-xl`}>
-                                            <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-500"></div>
-                                            <div className="relative z-10">
-                                                <div className="flex items-center gap-3 mb-4">
-                                                    <div className="bg-white/20 p-2.5 rounded-lg backdrop-blur">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                                        </svg>
-                                                    </div>
-                                                    <h3 className="text-white text-sm font-semibold">Accuracy</h3>
-                                                </div>
-                                                <p className="text-white text-5xl font-black mb-2 drop-shadow-lg">{metrics.accuracy}%</p>
-                                                <p className="text-white/90 text-sm font-medium">-2% per mistake</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-600 shadow-2xl">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className="bg-gradient-to-br from-blue-500 to-cyan-600 p-2.5 rounded-lg shadow-lg shadow-blue-500/50">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                                    <line x1="18" y1="20" x2="18" y2="10"/>
-                                                    <line x1="12" y1="20" x2="12" y2="4"/>
-                                                    <line x1="6" y1="20" x2="6" y2="14"/>
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <h3 className="text-xl font-bold text-white">Accuracy Trend</h3>
-                                                <p className="text-slate-400 text-sm">
-                                                    {metrics.dateRangeType === 'daily' ? 'Daily Accuracy (≤7 days)' : metrics.dateRangeType === 'weekly' ? 'Weekly Accuracy (≤30 days)' : 'Monthly Accuracy (>30 days)'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <PerformanceChart performanceData={metrics.performanceChartData} />
-                                    </div>
-
-                                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-600 shadow-2xl">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-2.5 rounded-lg shadow-lg shadow-purple-500/50">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                                                </svg>
-                                            </div>
-                                            <h3 className="text-xl font-bold text-white">Verification Breakdown</h3>
-                                        </div>
-                                        <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                                            {metrics.statusBreakdown.map(([status, count], index) => (
-                                                <div key={status} className="bg-slate-700/40 rounded-lg p-3 hover:bg-slate-700/60 transition-all border border-slate-600/50 hover:border-slate-500">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="flex-1 min-w-0">
-                                                            <h4 className="text-white font-medium text-sm truncate">{status}</h4>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <span className="text-slate-400 text-xs">{count} verification{count !== 1 ? 's' : ''}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right shrink-0">
-                                                            <div className="bg-cyan-500/10 px-2 py-1 rounded text-cyan-300 text-xs font-bold">#{index + 1}</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-
-                                            {metrics.statusBreakdown.length === 0 && (
-                                                <div className="text-center py-8 text-slate-400"><p className="text-sm">No verifications found</p></div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        ReactDOM.render(<VerificationDashboard />, document.getElementById('root'));
-    </script>
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
 </body>
 </html>
