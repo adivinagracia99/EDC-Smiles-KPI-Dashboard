@@ -153,8 +153,8 @@
                     const result = await response.json();
                     const rows = result.values || [];
                     
-                    // Skip header row
-                    const parsedData = rows.slice(1).map(row => ({
+                    // Skip first 2 header rows (row 1 and row 2)
+                    const parsedData = rows.slice(2).map(row => ({
                         date: row[0] || '',
                         status: row[9] || '', // Column J (index 9)
                         mistakes: {
